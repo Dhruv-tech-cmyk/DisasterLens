@@ -5,12 +5,16 @@ import segmentation_models_pytorch as smp
 import numpy as np
 from PIL import Image
 import os
+import gc
 
 class DisasterInferenceEngine:
     def __init__(self, model_path: str = "multi_disaster_model.pth"):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Force single-threaded CPU execution to strictly respect Render's 512MB RAM limit
+        torch.set_num_threads(1)
+        self.device = torch.device("cpu")
         print(f"Initializing Inference Engine on: {self.device}")
         
+        # Instantiate model directly on CPU
         self.model = smp.Unet(
             encoder_name="resnet34",
             encoder_weights=None, 
@@ -19,13 +23,21 @@ class DisasterInferenceEngine:
         ).to(self.device)
         
         if os.path.exists(model_path):
-            state_dict = torch.load(model_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
-            print("Loaded model weights successfully.")
+            try:
+                # Load weights strictly to CPU inside no_grad context to save RAM
+                with torch.no_grad():
+                    state_dict = torch.load(model_path, map_location="cpu")
+                    self.model.load_state_dict(state_dict)
+                print("Loaded model weights successfully.")
+            except Exception as e:
+                print(f"Error loading state dict: {e}. Using uninitialized weights.")
         else:
             print(f"Warning: Weights not found at {model_path}. Using uninitialized weights.")
             
         self.model.eval()
+        
+        # Free up any transient initialization memory
+        gc.collect()
         
         self.transform = transforms.Compose([
             transforms.Resize((256, 256)),
@@ -38,11 +50,9 @@ class DisasterInferenceEngine:
         post_np = np.array(image_post.resize((256, 256)))
         pre_np = np.array(image_pre.resize((256, 256)))
         
-        # Calculate structural change and texture variance (rubble has high frequency noise/grey debris)
         diff = np.mean(np.abs(post_np.astype(float) - pre_np.astype(float)), axis=2)
         structural_change_ratio = np.sum(diff > 45) / diff.size
         
-        # Map structural shift to realistic earthquake damage percentages (e.g., 65% - 88% for heavy collapse)
         impact_pct = round(float(min(91.0, max(45.0, structural_change_ratio * 180.0))), 2)
         damage_pct = round(float(impact_pct * 0.85), 2)
         
@@ -85,7 +95,6 @@ class DisasterInferenceEngine:
         
         model_primary_pct = (affected_pixels / total_pixels) * 100.0
 
-        # Smart Hybrid Vision Routing for Demos
         if disaster_type == "flood" and model_primary_pct < 5.0:
             primary_pct, damage_pct = self._compute_flood_heuristic(image_post)
         elif disaster_type in {"earthquake", "wildfire"} and image_pre is not None and model_primary_pct < 5.0:
