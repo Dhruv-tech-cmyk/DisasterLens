@@ -24,11 +24,11 @@ class DisasterInferenceEngine:
         
         if os.path.exists(model_path):
             try:
-                # Load weights strictly to CPU inside no_grad context to save RAM
+                # Load weights using mmap=True to stream from disk and prevent memory spikes
                 with torch.no_grad():
-                    state_dict = torch.load(model_path, map_location="cpu")
+                    state_dict = torch.load(model_path, map_location="cpu", mmap=True)
                     self.model.load_state_dict(state_dict)
-                print("Loaded model weights successfully.")
+                print("Loaded model weights successfully with memory-mapping.")
             except Exception as e:
                 print(f"Error loading state dict: {e}. Using uninitialized weights.")
         else:
