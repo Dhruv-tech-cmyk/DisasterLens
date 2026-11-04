@@ -1,26 +1,65 @@
 "use client";
 
-import { Activity, Globe, Wifi } from "lucide-react";
+import { Activity, Globe, Wifi, LayoutDashboard, ShieldAlert } from "lucide-react";
 
 interface HeaderProps {
   systemOnline: boolean;
   selectedRegion: string;
   onRegionChange: (region: string) => void;
+  activeTab: "spatial" | "triage";
+  onTabChange: (tab: "spatial" | "triage") => void;
 }
 
-export default function Header({ systemOnline, selectedRegion, onRegionChange }: HeaderProps) {
+export default function Header({
+  systemOnline,
+  selectedRegion,
+  onRegionChange,
+  activeTab,
+  onTabChange,
+}: HeaderProps) {
   return (
     <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-[500] px-6 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400">
-          <Activity className="w-5 h-5" />
+      <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <h1
+              className="text-base font-bold tracking-wider text-slate-100 uppercase"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              DisasterLens <span className="text-blue-500 text-xs font-mono font-normal">v4.2.1</span>
+            </h1>
+            <p className="text-[10px] font-mono text-slate-400">SPATIAL INTELLIGENCE PLATFORM</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-base font-bold tracking-wider text-slate-100 uppercase" style={{ fontFamily: "var(--font-display)" }}>
-            DisasterLens <span className="text-blue-500 text-xs font-mono font-normal">v4.2.1</span>
-          </h1>
-          <p className="text-[10px] font-mono text-slate-400">SPATIAL INTELLIGENCE PLATFORM</p>
-        </div>
+
+        {/* ── Navigation Tabs ── */}
+        <nav className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+          <button
+            onClick={() => onTabChange("spatial")}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "spatial"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5" />
+            <span>Spatial Analytics</span>
+          </button>
+          <button
+            onClick={() => onTabChange("triage")}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "triage"
+                ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Incident Triage</span>
+          </button>
+        </nav>
       </div>
 
       <div className="flex items-center gap-4">
