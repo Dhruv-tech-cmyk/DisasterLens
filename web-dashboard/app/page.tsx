@@ -39,7 +39,8 @@ export default function Home() {
     formData.append("disaster_type", disasterType);
 
     try {
-      const response = await fetch("http://localhost:8000/analyze-flood/", {
+      // Updated to point directly to your live Render backend URL
+      const response = await fetch("https://disasterlens-api.onrender.com/analyze/", {
         method: "POST",
         body: formData,
       });
