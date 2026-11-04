@@ -18,6 +18,10 @@ app.add_middleware(
 
 engine = DisasterInferenceEngine(model_path=str(Path(__file__).with_name("multi_disaster_model.onnx")))
 
+@app.get("/")
+def read_root():
+    return {"status": "Online", "message": "DisasterLens ONNX API is running successfully"}
+
 @app.post("/analyze/")
 @app.post("/analyze-flood/")  # Supports legacy/alternate paths
 async def analyze_disaster(
