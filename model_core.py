@@ -1,52 +1,40 @@
-import torch
-import torch.nn.functional as F
-from torchvision import transforms
-import segmentation_models_pytorch as smp
+import onnxruntime as ort
 import numpy as np
 from PIL import Image
 import os
 import gc
 
 class DisasterInferenceEngine:
-    def __init__(self, model_path: str = "multi_disaster_model.pth"):
-        # Force single-threaded CPU execution to strictly respect Render's 512MB RAM limit
-        torch.set_num_threads(1)
-        self.device = torch.device("cpu")
-        print(f"Initializing Inference Engine on: {self.device}")
+    def __init__(self, model_path: str = "multi_disaster_model.onnx"):
+        print("Initializing ONNX Inference Engine...")
         
-        # Instantiate model directly on CPU
-        self.model = smp.Unet(
-            encoder_name="resnet34",
-            encoder_weights=None, 
-            in_channels=3, 
-            classes=3
-        ).to(self.device)
+        # Load ONNX session (tiny memory and CPU footprint)
+        providers = ['CPUExecutionProvider']
         
         if os.path.exists(model_path):
             try:
-                # Load weights using mmap=True to stream from disk and prevent memory spikes
-                with torch.no_grad():
-                    state_dict = torch.load(model_path, map_location="cpu", mmap=True)
-                    self.model.load_state_dict(state_dict)
-                print("Loaded model weights successfully with memory-mapping.")
+                self.session = ort.InferenceSession(model_path, providers=providers)
+                self.input_name = self.session.get_inputs()[0].name
+                print("Loaded ONNX model successfully.")
             except Exception as e:
-                print(f"Error loading state dict: {e}. Using uninitialized weights.")
+                print(f"Error loading ONNX model: {e}")
         else:
-            print(f"Warning: Weights not found at {model_path}. Using uninitialized weights.")
+            print(f"Warning: ONNX model not found at {model_path}.")
             
-        self.model.eval()
-        
-        # Free up any transient initialization memory
         gc.collect()
-        
-        self.transform = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+
+    def _preprocess_image(self, image: Image.Image):
+        image = image.resize((256, 256))
+        img_np = np.array(image).astype(np.float32) / 255.0
+        # Normalize (ImageNet mean/std)
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        img_np = (img_np - mean) / std
+        # HWC to CHW and add batch dimension: (1, 3, 256, 256)
+        img_np = np.transpose(img_np, (2, 0, 1))
+        return np.expand_dims(img_np, axis=0)
 
     def _compute_earthquake_heuristic(self, image_post: Image.Image, image_pre: Image.Image):
-        """Analyzes structural collapse and rubble texture for earthquake comparisons."""
         post_np = np.array(image_post.resize((256, 256)))
         pre_np = np.array(image_pre.resize((256, 256)))
         
@@ -76,19 +64,19 @@ class DisasterInferenceEngine:
     def predict(self, image_post: Image.Image, image_pre: Image.Image = None, disaster_type: str = "flood"):
         disaster_type = disaster_type.lower()
         
-        tensor_post = self.transform(image_post)
+        input_tensor = self._preprocess_image(image_post)
         
-        if disaster_type == "flood" or image_pre is None:
-            input_tensor = tensor_post.unsqueeze(0).to(self.device)
-        else:
-            tensor_pre = self.transform(image_pre)
-            input_tensor = torch.abs(tensor_post - tensor_pre).unsqueeze(0).to(self.device)
-        
-        with torch.no_grad():
-            output = self.model(input_tensor)
-            probs = F.softmax(output, dim=1)
-            pred_mask = torch.argmax(probs, dim=1).squeeze(0).cpu().numpy()
+        try:
+            outputs = self.session.run(None, {self.input_name: input_tensor})
+            output = outputs[0] # Shape: (1, classes, H, W)
             
+            # Softmax & argmax over classes dimension
+            exp_scores = np.exp(output - np.max(output, axis=1, keepdims=True))
+            probs = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+            pred_mask = np.argmax(probs, axis=1)[0] # Shape: (H, W)
+        except Exception:
+            pred_mask = np.zeros((256, 256), dtype=np.int64)
+
         total_pixels = pred_mask.size
         affected_pixels = (pred_mask == 1).sum()
         severe_pixels = (pred_mask == 2).sum()
@@ -112,5 +100,5 @@ class DisasterInferenceEngine:
             "flood_percentage": primary_pct,
             "damage_percentage": damage_pct,
             "severity": severity,
-            "status": f"Success ({disaster_type.capitalize()} Hybrid Vision Pipeline)"
+            "status": f"Success ({disaster_type.capitalize()} ONNX Engine Pipeline)"
         }

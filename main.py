@@ -16,17 +16,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-engine = DisasterInferenceEngine(model_path=str(Path(__file__).with_name("multi_disaster_model.pth")))
+engine = DisasterInferenceEngine(model_path=str(Path(__file__).with_name("multi_disaster_model.onnx")))
 
 @app.post("/analyze/")
-@app.post("/analyze-flood/")  # Supports the frontend's legacy/alternate request path
+@app.post("/analyze-flood/")  # Supports legacy/alternate paths
 async def analyze_disaster(
-    file: UploadFile = File(...),                    # Post-disaster image
-    file_pre: UploadFile = File(None),              # Pre-disaster image (optional for flood, required for EQ/wildfire)
+    file: UploadFile = File(...),                    
+    file_pre: UploadFile = File(None),              
     disaster_type: str = Form("flood")
 ):
     try:
-        # Load post-disaster image
         post_contents = await file.read()
         try:
             image_post = Image.open(io.BytesIO(post_contents)).convert("RGB")
@@ -36,7 +35,6 @@ async def analyze_disaster(
         image_pre = None
         disaster_lower = disaster_type.lower()
         
-        # Validate pre-disaster image requirement for change-detection disasters
         if disaster_lower in {"earthquake", "wildfire"}:
             if not file_pre:
                 raise HTTPException(
@@ -49,7 +47,6 @@ async def analyze_disaster(
             except UnidentifiedImageError as exc:
                 raise HTTPException(status_code=400, detail="Pre-disaster file is not a valid image") from exc
 
-        # Pass to inference engine
         results = engine.predict(image_post=image_post, image_pre=image_pre, disaster_type=disaster_lower)
         return results
 
@@ -60,5 +57,5 @@ async def analyze_disaster(
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 7860))
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)

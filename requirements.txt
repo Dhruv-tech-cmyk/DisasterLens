@@ -1,8 +1,6 @@
 fastapi
-uvicorn[standard]
-python-multipart
-Pillow
+uvicorn
+onnxruntime
 numpy
-torch
-torchvision
-segmentation-models-pytorch
+Pillow
+python-multipart
