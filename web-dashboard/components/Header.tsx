@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Globe, Wifi, LayoutDashboard, ShieldAlert } from "lucide-react";
+import { Activity, Globe, Wifi, LayoutDashboard, ShieldAlert, Download } from "lucide-react";
 
 interface HeaderProps {
   systemOnline: boolean;
@@ -63,6 +63,16 @@ export default function Header({
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Mobile App Download Button */}
+        <a
+          href="https://github.com/Dhruv-tech-cmyk/DisasterLens/releases/download/v1.0.0/app-release.apk"
+          className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-lg shadow-blue-600/20 transition-all cursor-pointer"
+          download="app-release.apk"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Download App</span>
+        </a>
+
         {/* Region Selector Dropdown */}
         <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
           <Globe className="w-3.5 h-3.5 text-blue-400" />
