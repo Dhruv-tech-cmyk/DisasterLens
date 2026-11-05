@@ -29,7 +29,7 @@ export default function Header({
               className="text-base font-bold tracking-wider text-slate-100 uppercase"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              DisasterLens <span className="text-blue-500 text-xs font-mono font-normal">v4.2.1</span>
+              DisasterLens
             </h1>
             <p className="text-[10px] font-mono text-slate-400">SPATIAL INTELLIGENCE PLATFORM</p>
           </div>
@@ -93,7 +93,7 @@ export default function Header({
         <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5">
           <Wifi className={`w-3.5 h-3.5 ${systemOnline ? "text-emerald-400" : "text-amber-400"}`} />
           <span className="text-xs font-mono font-semibold text-slate-200">
-            {systemOnline ? "System Online" : "Simulation Mode"}
+            {systemOnline ? "API Online" : "API Offline"}
           </span>
         </div>
       </div>

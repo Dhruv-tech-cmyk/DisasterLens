@@ -69,8 +69,9 @@ export default function GeospatialMap({ disasterType, isAnalyzed, selectedRegion
           <span className="font-bold text-slate-100">REGION: {selectedRegion}</span>
         </div>
         <div className="text-[10px] text-slate-400 mt-0.5">
-          MODE: {disasterType.toUpperCase()} {isAnalyzed ? "| INFERENCE ACTIVE" : "| AWAITING TILE"}
+          VIEW: {disasterType.toUpperCase()} {isAnalyzed ? "| ANALYSIS COMPLETE" : "| AWAITING TILE"}
         </div>
+        <div className="text-[10px] text-slate-500 mt-1">Basemap preview · uploaded tiles are not georeferenced</div>
       </div>
     </div>
   );

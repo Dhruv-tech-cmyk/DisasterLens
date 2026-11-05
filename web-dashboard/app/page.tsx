@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { Activity, Play, RefreshCw, Layers, ShieldAlert, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Activity, Play, RefreshCw, Layers, AlertTriangle, CheckCircle2 } from "lucide-react";
 import Header from "../components/Header";
 import FileUploadZone from "../components/FileUploadZone";
 import AssessmentReportCard, { AnalysisResult } from "../components/AssessmentReportCard";
+
+const API_BASE_URL = (process.env.NEXT_PUBLIC_DISASTERLENS_API_URL || "http://localhost:8080").replace(/\/$/, "");
 
 const GeospatialMap = dynamic(() => import("../components/GeospatialMap"), {
   ssr: false,
@@ -16,7 +18,7 @@ const GeospatialMap = dynamic(() => import("../components/GeospatialMap"), {
   ),
 });
 
-// Sample Incident Data for the Triage View
+// Example-only triage content. These incidents are not produced by the model.
 const SAMPLE_INCIDENTS = [
   {
     id: 1,
@@ -52,16 +54,32 @@ export default function Home() {
   const [selectedRegion, setSelectedRegion] = useState<string>("GLOBAL");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [systemOnline, setSystemOnline] = useState<boolean>(true);
+  const [systemOnline, setSystemOnline] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Triage state
   const [selectedIncident, setSelectedIncident] = useState(SAMPLE_INCIDENTS[0]);
 
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((health) => { if (active) setSystemOnline(health.status === "Online"); })
+      .catch(() => { if (active) setSystemOnline(false); });
+    return () => { active = false; };
+  }, []);
+
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
+    if (disasterType !== "flood" && !filePre) {
+      setError("Add a pre-disaster reference image for earthquake or wildfire analysis.");
+      return;
+    }
 
     setIsLoading(true);
+    setError(null);
+    setResult(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -71,52 +89,33 @@ export default function Home() {
     formData.append("disaster_type", disasterType);
 
     try {
-      const response = await fetch("https://disasterlens-api.onrender.com/analyze/", {
+      const response = await fetch(`${API_BASE_URL}/analyze/`, {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Backend offline");
-
-      const data = await response.json();
       setSystemOnline(true);
-
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof data.detail === "string" ? data.detail : `Analysis failed (${response.status}).`;
+        throw new Error(detail);
+      }
+      const impact = Number(data.flood_percentage);
+      const damage = Number(data.damage_percentage);
+      const severity = String(data.severity ?? "").toLowerCase();
+      if (!Number.isFinite(impact) || !Number.isFinite(damage) || !["critical", "moderate", "low", "high"].includes(severity)) {
+        throw new Error("The API response is missing valid impact, damage, or severity values.");
+      }
       setResult({
-        disaster_type: disasterType,
-        impact_ratio: data.flood_percentage ?? data.impact_ratio ?? 78.4,
-        damage_percentage: data.damage_percentage ?? 42.1,
-        severity: (data.severity?.toLowerCase() as any) || "critical",
-        engine_status: data.status || "Operational",
-        pipeline_type:
-          disasterType === "flood"
-            ? "Single-Image Spectral U-Net"
-            : "Siamese Bi-Temporal Change Detection",
-        confidence: 94.2,
-        processing_time_ms: Math.floor(Math.random() * 200) + 250,
-        affected_area_km2: Math.floor(Math.random() * 500) + 120,
-        timestamp: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        disaster_type: data.disaster_type ?? disasterType,
+        impact_ratio: impact,
+        damage_percentage: damage,
+        severity: severity as AnalysisResult["severity"],
+        engine_status: typeof data.status === "string" ? data.status : "Analysis complete",
+        timestamp: new Date().toLocaleString(),
       });
-    } catch {
-      setSystemOnline(false);
-      setTimeout(() => {
-        setResult({
-          disaster_type: disasterType,
-          impact_ratio: disasterType === "flood" ? 82.5 : disasterType === "wildfire" ? 89.1 : 76.4,
-          damage_percentage: 58.3,
-          severity: "critical",
-          engine_status: "Simulation Mode (Offline Fallback)",
-          pipeline_type:
-            disasterType === "flood"
-              ? "U-Net Semantic Segmentation"
-              : "Siamese Bi-Temporal ResNet34",
-          confidence: 91.8,
-          processing_time_ms: 312,
-          affected_area_km2: 340,
-          timestamp: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        });
-        setIsLoading(false);
-      }, 1200);
-      return;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not reach the DisasterLens API.");
     } finally {
       setIsLoading(false);
     }
@@ -161,6 +160,7 @@ export default function Home() {
                       onChange={(e) => {
                         setDisasterType(e.target.value);
                         setResult(null);
+                        setError(null);
                       }}
                       className="w-full bg-[#090d16] border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-200 focus:outline-none focus:border-blue-500 transition-all cursor-pointer"
                     >
@@ -195,7 +195,7 @@ export default function Home() {
                   <div className="pt-2 flex gap-3">
                     <button
                       type="submit"
-                      disabled={isLoading || !file}
+                    disabled={isLoading || !file || (disasterType !== "flood" && !filePre)}
                       className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:from-slate-800 disabled:to-slate-900 disabled:text-slate-600 text-white text-xs font-bold uppercase tracking-wider py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                     >
                       {isLoading ? (
@@ -225,6 +225,7 @@ export default function Home() {
                 </form>
               </div>
 
+              {error && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
               <AssessmentReportCard result={result} isLoading={isLoading} />
             </section>
 
@@ -245,10 +246,11 @@ export default function Home() {
                   Priority Queue
                 </h2>
                 <span className="text-xs font-mono text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/30">
-                  {SAMPLE_INCIDENTS.length} Critical Events
+                  Demo data
                 </span>
               </div>
 
+              <p className="text-xs text-slate-500">Illustrative triage examples; these are not live alerts from the model.</p>
               <div className="space-y-3">
                 {SAMPLE_INCIDENTS.map((inc) => (
                   <div
